@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "crawl": "tsx scripts/crawl-demo.mjs",
     "start": "tsx src/server.ts",
+    "geoip:update": "node scripts/update-geoip.mjs",
     "smoke": "tsx scripts/smoke.ts",
     "ui-smoke": "tsx scripts/ui-smoke.ts"
   },

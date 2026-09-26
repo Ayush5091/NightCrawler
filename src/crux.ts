@@ -4,7 +4,7 @@ type History = NonNullable<ScanResult["cruxHistory"]>;
 type CruxRecord = {
   record?: {
     collectionPeriods?: Array<{ firstDate: { year: number; month: number; day: number }; lastDate: { year: number; month: number; day: number } }>;
-    metrics?: Record<string, { percentilesTimeseries?: { p75s?: Array<number | null> } }>;
+    metrics?: Record<string, { percentilesTimeseries?: { p75s?: Array<number | string | null> } }>;
   };
 };
 
@@ -20,7 +20,7 @@ export async function fetchCruxHistory(rawUrl: string, device: "desktop" | "mobi
     const response = await fetch(`https://chromeuxreport.googleapis.com/v1/records:queryHistoryRecord?key=${encodeURIComponent(key)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ origin, formFactor, metrics: ["largest_contentful_paint", "cumulative_layout_shift", "interaction_to_next_paint", "experimental_time_to_first_byte"] }),
+      body: JSON.stringify({ origin, formFactor, collectionPeriodCount: 40, metrics: ["largest_contentful_paint", "cumulative_layout_shift", "interaction_to_next_paint", "experimental_time_to_first_byte"] }),
       signal: AbortSignal.timeout(15000),
     });
     if (response.status === 404) return { status: "insufficient_data", formFactor, periods: [] };
@@ -28,7 +28,12 @@ export async function fetchCruxHistory(rawUrl: string, device: "desktop" | "mobi
     const data = await response.json() as CruxRecord;
     const record = data.record;
     if (!record?.collectionPeriods?.length) return { status: "insufficient_data", formFactor, periods: [] };
-    const p75 = (metric: string, index: number): number | null => record.metrics?.[metric]?.percentilesTimeseries?.p75s?.[index] ?? null;
+    const p75 = (metric: string, index: number): number | null => {
+      const raw = record.metrics?.[metric]?.percentilesTimeseries?.p75s?.[index];
+      if (raw == null) return null;
+      const value = Number(raw);
+      return Number.isFinite(value) ? value : null;
+    };
     return {
       status: "available", formFactor,
       periods: record.collectionPeriods.map((period, index) => ({

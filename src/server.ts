@@ -2,6 +2,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { loadEnvFile } from "node:process";
 import { crawl } from "./crawl";
 import { buildInsights, diffScans } from "./analysis";
 import { renderPdf } from "./pdf";
@@ -10,6 +12,8 @@ import { runLighthouse } from "./lighthouse";
 import { fetchCruxHistory } from "./crux";
 import type { ScanResult } from "./types";
 
+const localEnv = join(process.cwd(), ".env.local");
+if (existsSync(localEnv)) loadEnvFile(localEnv);
 const port = Number(process.env.PORT ?? 4173);
 const dataDir = join(process.cwd(), ".scan-data");
 const publicDir = join(process.cwd(), "web");

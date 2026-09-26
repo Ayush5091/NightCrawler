@@ -21,9 +21,9 @@ scanner for that scan only and is never written to scan history. Authenticated
 reports omit Lighthouse because the separate audit browser cannot reuse the
 uploaded session. Keep session files private.
 
-For offline IP location and ASN lookups, download the GeoLite2 City and ASN
-`.mmdb` files from MaxMind using your own account and set `GEOLITE2_CITY_DB`
-and `GEOLITE2_ASN_DB` to their absolute paths before starting the server.
+For offline IP location and ASN lookups, the scanner reads GeoLite2 City and
+ASN `.mmdb` files from the ignored `data/geoip/` directory by default. You can
+override the paths with `GEOLITE2_CITY_DB` and `GEOLITE2_ASN_DB`.
 Without these files the report still shows resolved IPs and explicitly marks
 country/ASN as unavailable. Vendor country is catalogue metadata about the
 organisation; IP country is the current resolved server location.
@@ -35,15 +35,16 @@ history data.
 
 ### GeoLite2 and CrUX setup on Windows
 
-1. Create a [MaxMind account](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data/), generate a download license key, and download the **GeoLite2 City** and **GeoLite2 ASN** databases in `.mmdb` format. Extract both files to a private folder outside the repository and keep them updated under MaxMind's terms.
-2. In the PowerShell window that will run the scanner, set the database paths:
+1. Create a [MaxMind account](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data/) and generate a download license key. Create an ignored `.env.local` file in the project folder with these entries, using your own values:
 
-   ```powershell
-   $env:GEOLITE2_CITY_DB = 'C:\path\to\GeoLite2-City.mmdb'
-   $env:GEOLITE2_ASN_DB = 'C:\path\to\GeoLite2-ASN.mmdb'
+   ```text
+   MAXMIND_ACCOUNT_ID=your_numeric_account_id
+   MAXMIND_LICENSE_KEY=your_license_key
+   CRUX_API_KEY=your_crux_api_key
    ```
 
-3. For real-user history, [enable the Chrome UX Report API and create a key](https://developer.chrome.com/docs/crux/history-api). Restrict the key to this API. Set `$env:CRUX_API_KEY` in the same PowerShell window using your private key, then run `npm start`. Do not commit the key or paste it into the dashboard.
+2. Run `npm run geoip:update`. It downloads the City and ASN databases to the ignored `data/geoip/` directory. [MaxMind requires current databases](https://dev.maxmind.com/geoip/updating-databases/), so run this periodically and restart the scanner after an update.
+3. For real-user history, [enable the Chrome UX Report API and create a key](https://developer.chrome.com/docs/crux/history-api). Restrict the key to this API and add it as `CRUX_API_KEY` in `.env.local`, then restart `npm start`. Do not commit or share `.env.local`.
 
 The scanner never calls MaxMind web APIs. CrUX is queried only if its key is
 configured. A missing database or insufficient CrUX traffic is displayed as

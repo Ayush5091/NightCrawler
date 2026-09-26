@@ -1,5 +1,7 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { open, type AsnResponse, type CityResponse } from "maxmind";
 import type { RequestObservation, ScanResult } from "./types";
 
@@ -8,9 +10,11 @@ type Readers = { city: Awaited<ReturnType<typeof open<CityResponse>>> | null; as
 let readersPromise: Promise<Readers> | null = null;
 
 async function readers(): Promise<Readers> {
+  const cityPath = process.env.GEOLITE2_CITY_DB ?? resolve("data", "geoip", "GeoLite2-City.mmdb");
+  const asnPath = process.env.GEOLITE2_ASN_DB ?? resolve("data", "geoip", "GeoLite2-ASN.mmdb");
   readersPromise ??= Promise.all([
-    process.env.GEOLITE2_CITY_DB ? open<CityResponse>(process.env.GEOLITE2_CITY_DB).catch(() => null) : null,
-    process.env.GEOLITE2_ASN_DB ? open<AsnResponse>(process.env.GEOLITE2_ASN_DB).catch(() => null) : null,
+    existsSync(cityPath) ? open<CityResponse>(cityPath).catch(() => null) : null,
+    existsSync(asnPath) ? open<AsnResponse>(asnPath).catch(() => null) : null,
   ]).then(([city, asn]) => ({ city, asn }));
   return readersPromise;
 }
