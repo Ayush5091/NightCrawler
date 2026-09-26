@@ -1,0 +1,9 @@
+node_modules/
+.scan-data/
+dashboard.png
+dashboard-demo.png
+*.mmdb
+*.env
+.env*
+*storage-state*.json
+*session-state*.json

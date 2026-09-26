@@ -1,0 +1,25 @@
+{
+  "name": "standalone-webcrawler",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "crawl": "tsx scripts/crawl-demo.mjs",
+    "start": "tsx src/server.ts",
+    "smoke": "tsx scripts/smoke.ts",
+    "ui-smoke": "tsx scripts/ui-smoke.ts"
+  },
+  "dependencies": {
+    "chrome-launcher": "^1.2.1",
+    "lighthouse": "^13.5.0",
+    "maxmind": "^5.0.7",
+    "playwright": "^1.49.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.6.2"
+  }
+}
