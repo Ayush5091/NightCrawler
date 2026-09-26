@@ -5,22 +5,34 @@
   "type": "module",
   "main": "./src/index.ts",
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "build:web": "vite build",
+    "dev:web": "vite",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.web.json --noEmit",
     "crawl": "tsx scripts/crawl-demo.mjs",
-    "start": "tsx src/server.ts",
+    "start": "npm run build:web && tsx src/server.ts",
     "geoip:update": "node scripts/update-geoip.mjs",
     "smoke": "tsx scripts/smoke.ts",
     "ui-smoke": "tsx scripts/ui-smoke.ts"
   },
   "dependencies": {
+    "@fontsource/roboto": "^5.3.0",
     "chrome-launcher": "^1.2.1",
+    "framer-motion": "^13.4.4",
+    "gsap": "^3.15.0",
     "lighthouse": "^13.5.0",
+    "lucide-react": "^1.48.0",
     "maxmind": "^5.0.7",
-    "playwright": "^1.49.0"
+    "playwright": "^1.49.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
     "tsx": "^4.20.0",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "vite": "^8.3.1"
   }
 }

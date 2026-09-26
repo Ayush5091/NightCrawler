@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { extname, isAbsolute, join, relative, resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { loadEnvFile } from "node:process";
 import { crawl } from "./crawl";
@@ -16,7 +16,7 @@ const localEnv = join(process.cwd(), ".env.local");
 if (existsSync(localEnv)) loadEnvFile(localEnv);
 const port = Number(process.env.PORT ?? 4173);
 const dataDir = join(process.cwd(), ".scan-data");
-const publicDir = join(process.cwd(), "web");
+const publicDir = resolve(process.cwd(), "web-dist");
 const jobs = new Map<string, { status: "running" | "completed" | "failed"; stage?: string; error?: string; result?: ScanResult }>();
 
 function json(res: ServerResponse, status: number, value: unknown) {
@@ -42,14 +42,26 @@ async function stored(id: string): Promise<ScanResult | null> {
 async function handle(req: IncomingMessage, res: ServerResponse) {
   const route = new URL(req.url ?? "/", "http://localhost");
   if (req.method === "GET" && route.pathname === "/") {
-    res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'", "x-content-type-options": "nosniff" });
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'", "x-content-type-options": "nosniff" });
     res.end(await readFile(join(publicDir, "index.html")));
     return;
   }
-  if (req.method === "GET" && ["/app.js", "/style.css"].includes(route.pathname)) {
-    res.writeHead(200, { "content-type": route.pathname.endsWith(".js") ? "text/javascript; charset=utf-8" : "text/css; charset=utf-8", "x-content-type-options": "nosniff" });
-    res.end(await readFile(join(publicDir, route.pathname.slice(1))));
-    return;
+  if (req.method === "GET" && !route.pathname.startsWith("/api/")) {
+    const assetPath = resolve(publicDir, `.${route.pathname}`);
+    const relativeAssetPath = relative(publicDir, assetPath);
+    if (!relativeAssetPath.startsWith("..") && !isAbsolute(relativeAssetPath)) {
+      try {
+        const type = new Map([
+          [".js", "text/javascript; charset=utf-8"], [".css", "text/css; charset=utf-8"],
+          [".woff2", "font/woff2"], [".woff", "font/woff"], [".svg", "image/svg+xml"],
+          [".png", "image/png"], [".webp", "image/webp"], [".ico", "image/x-icon"],
+        ]).get(extname(assetPath)) ?? "application/octet-stream";
+        const cacheControl = route.pathname.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache";
+        res.writeHead(200, { "content-type": type, "cache-control": cacheControl, "x-content-type-options": "nosniff" });
+        res.end(await readFile(assetPath));
+        return;
+      } catch { /* Fall through to the API/404 handler. */ }
+    }
   }
   if (req.method === "POST" && route.pathname === "/api/scans") {
     const input = await body(req) as Record<string, unknown>;
