@@ -28,7 +28,7 @@ import { MAX_URL_LENGTH } from "./ssrf";
  * sole purpose is attribution. Anything that might select content — `id`, `q`,
  * `page`, `lang` — is kept, even though keeping them costs budget.
  */
-export const TRACKING_PARAMETERS = new Set([
+const TRACKING_PARAMETERS = new Set([
   "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
   "utm_id", "utm_source_platform", "utm_creative_format", "utm_marketing_tactic",
   "gclid", "gclsrc", "dclid", "wbraid", "gbraid", // Google
@@ -89,7 +89,7 @@ export type NormalisedUrl =
  * modelling facets properly, but it is predictable and it is documented, which
  * an emergent crawl explosion is not.
  */
-export const MAX_QUERY_PARAMETERS = 8;
+const MAX_QUERY_PARAMETERS = 8;
 
 /**
  * Canonicalises a URL for comparison and queuing.
@@ -172,9 +172,9 @@ export function normaliseUrl(raw: string, base?: string): NormalisedUrl {
  * Deliberately origin and not registrable domain. `blog.example.com` is a
  * different origin from `www.example.com` and may be a different application
  * owned by a different team; crawling into it because the domain looks related
- * would be scanning something the customer did not ask us to scan.
+ * would be scanning something the user did not ask to scan.
  */
-export function isSameOrigin(candidate: string, origin: string): boolean {
+function isSameOrigin(candidate: string, origin: string): boolean {
   try {
     return new URL(candidate).origin === new URL(origin).origin;
   } catch {
@@ -194,8 +194,8 @@ export function isThirdParty(host: string, pageOrigin: string): boolean {
   if (candidate === pageHost) return false;
   // `cdn.example.com` is first-party to `example.com`, and vice versa. This is
   // a suffix test rather than a public-suffix-list lookup, which means it is
-  // wrong for hosts under a multi-party suffix such as `github.io`. Documented
-  // in docs/crawler.md; the PSL is the upgrade.
+  // wrong for hosts under a multi-party suffix such as `github.io`. The public
+  // suffix list is the upgrade.
   return !(candidate.endsWith(`.${pageHost}`) || pageHost.endsWith(`.${candidate}`));
 }
 

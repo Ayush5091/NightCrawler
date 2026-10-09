@@ -1,8 +1,6 @@
 node_modules/
 web-dist/
 .scan-data/
-dashboard.png
-dashboard-demo.png
 *.mmdb
 *.env
 .env*

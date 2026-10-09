@@ -1,7 +1,7 @@
 import { DEFAULT_LIMITS, type RequestObservation, type ScanResult } from "./types";
 import { detectTechnologies } from "./detectors";
 
-/** A clearly labelled, deterministic sample so the dashboard works offline. */
+/** A clearly labelled, deterministic synthetic scan used by the UI smoke test. */
 export function demoScan(): ScanResult {
   const home = "https://demo.sitescope.test/";
   const checkout = "https://demo.sitescope.test/checkout";

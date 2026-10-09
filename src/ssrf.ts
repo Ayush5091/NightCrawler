@@ -6,10 +6,10 @@ import net from "node:net";
  *
  * ## The threat
  *
- * The scanner navigates a URL a customer typed into an onboarding form. That
- * makes it a request-forgery primitive by construction: whatever it fetches, it
- * fetches from inside our network, with our egress identity. An unguarded
- * crawler is a proxy that anyone with a signup can point at
+ * The scanner navigates a URL a user typed into the dashboard. That makes it a
+ * request-forgery primitive by construction: whatever it fetches, it fetches
+ * from inside the host's network, with the host's egress identity. An unguarded
+ * crawler is a proxy that anyone with access can point at
  * `http://169.254.169.254/latest/meta-data/iam/security-credentials/`.
  *
  * ## Why hostname checks alone are not enough
@@ -28,10 +28,9 @@ import net from "node:net";
  * This module closes the first and *narrows* the second. It resolves all
  * addresses up front and rejects on any private answer, and `assertNavigable`
  * is re-run on every redirect hop and every new URL rather than once per scan.
- * The residual rebinding window is documented in `docs/crawler.md` and is a
- * known limitation: fully closing it needs egress-level control (a network
- * policy, a proxy that pins the resolved address, or a dedicated egress VPC),
- * which is infrastructure this repository does not yet have.
+ * The residual rebinding window is a known limitation: fully closing it needs
+ * egress-level control (a network policy, a proxy that pins the resolved
+ * address, or a dedicated egress VPC) in the hosting environment.
  *
  * Nothing here is a substitute for that network control. It is the application
  * half of a defence that properly has two halves.
@@ -190,14 +189,14 @@ function isBlockedIpv6(ip: string): boolean {
 }
 
 /** True when an IP literal is in a range the scanner must never contact. */
-export function isBlockedAddress(ip: string): boolean {
+function isBlockedAddress(ip: string): boolean {
   if (net.isIPv4(ip)) return isBlockedIpv4(ip);
   if (net.isIPv6(ip)) return isBlockedIpv6(ip);
   return true; // not an IP we understand
 }
 
 /** True when a hostname is refused before any DNS lookup. */
-export function isBlockedHostname(hostname: string): boolean {
+function isBlockedHostname(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/\.$/, ""); // trailing dot is the same name
   if (BLOCKED_HOSTNAMES.has(host)) return true;
   if (BLOCKED_SUFFIXES.some((suffix) => host.endsWith(suffix))) return true;
@@ -208,12 +207,10 @@ export function isBlockedHostname(hostname: string): boolean {
 }
 
 /**
- * Checks a URL's shape without touching the network.
- *
- * Separated from resolution so it can be unit tested exhaustively and so the
- * cheap checks run first.
+ * Checks a URL's shape without touching the network, so the cheap checks run
+ * before DNS resolution.
  */
-export function checkUrlShape(raw: string): SsrfVerdict {
+function checkUrlShape(raw: string): SsrfVerdict {
   if (raw.length > MAX_URL_LENGTH) {
     return deny("url_too_long", `URL exceeds ${MAX_URL_LENGTH} characters`);
   }
@@ -253,10 +250,8 @@ export function checkUrlShape(raw: string): SsrfVerdict {
   return allow();
 }
 
-export type Resolver = (hostname: string) => Promise<string[]>;
-
-/** Default resolver: every A/AAAA record, so one bad answer is enough to refuse. */
-const defaultResolver: Resolver = async (hostname) => {
+/** Every A/AAAA record, so one bad answer is enough to refuse. */
+const resolveAll = async (hostname: string): Promise<string[]> => {
   const records = await lookup(hostname, { all: true, verbatim: true });
   return records.map((record) => record.address);
 };
@@ -270,23 +265,12 @@ const defaultResolver: Resolver = async (hostname) => {
  */
 export async function assertNavigable(
   raw: string,
-  options: { resolver?: Resolver; allowPrivateTargets?: boolean } = {},
+  options: { allowPrivateTargets?: boolean } = {},
 ): Promise<SsrfVerdict> {
-  // `allowPrivateTargets` exists so the crawl can be exercised against a
-  // loopback fixture server, and for no other reason.
-  //
-  // Without it the rendering half of the crawler is untestable: the guard
-  // refuses 127.0.0.1 - correctly - so the only alternative is to point tests
-  // at the live internet, which makes them non-hermetic, slow and dependent on
-  // a third party's markup not changing. That trade produced a scanner whose
-  // Playwright half had never been executed by a test at all.
-  //
-  // It is deliberately a direct argument to `crawl()`, never a scan option and
-  // never anything the HTTP API can set: `POST /scans` validates the URL shape
-  // before a row exists, and the worker calls `crawl()` without this flag. A
-  // request cannot reach it. `crawler-ssrf.test.ts` asserts that the guard
-  // still refuses private space when it is absent, which is every production
-  // path.
+  // `allowPrivateTargets` exists so `scripts/smoke.ts` can crawl a loopback
+  // fixture server, and for no other reason. It is a direct argument to
+  // `crawl()`, never anything the HTTP API can set: `server.ts` calls `crawl()`
+  // without it, so every request-driven scan refuses private space.
   if (options.allowPrivateTargets) {
     let parsed: URL | null = null;
     try {
@@ -309,11 +293,9 @@ export async function assertNavigable(
   // Already judged as a literal in checkUrlShape; no name to resolve.
   if (net.isIP(hostname)) return allow([hostname]);
 
-  const resolve = options.resolver ?? defaultResolver;
-
   let addresses: string[];
   try {
-    addresses = await resolve(hostname);
+    addresses = await resolveAll(hostname);
   } catch (error) {
     return deny("dns_resolution_failed", `could not resolve ${hostname}: ${(error as Error).message}`);
   }

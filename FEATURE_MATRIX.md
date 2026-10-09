@@ -1,8 +1,8 @@
-# Feature audit
+# TRAXELON feature matrix
 
-Checked against the requested Data Tracker and BuiltWith/GTmetrix feature lists on 26 September 2026. **Yes** means the current scanner records or reports it. **Partial** means the evidence is incomplete, inferred, limited to sampled pages, or only available in the JSON export. **No** means no implementation. A failed or blocked scan has no measurements. The demo is synthetic.
+What TRAXELON Data and TRAXELON Built cover today, compared with a full data-flow tracker and a BuiltWith/GTmetrix-style analyser. **Yes** means the current scanner records or reports it. **Partial** means the evidence is incomplete, inferred, limited to sampled pages, or only available in the JSON export. **No** means no implementation. A failed or blocked scan has no measurements.
 
-## 1. Data Flow / Data Tracker
+## 1. TRAXELON Data: data flows and tracking
 
 | Area | Yes | Partial | No |
 | --- | --- | --- | --- |
@@ -14,11 +14,11 @@ Checked against the requested Data Tracker and BuiltWith/GTmetrix feature lists 
 | Browser storage | localStorage and sessionStorage key names, IndexedDB database names, origin | Storage is sampled on rendered pages | IndexedDB object stores/keys, storage change history, related vendor mapping |
 | Data flow visualization | Page-to-destination list and per-request table; unknown destination queue | Per-page and per-vendor breakdown can be derived from JSON; country is shown per destination when database exists | Script-to-request graph, vendor relationship graph, country flow map, full initiator chain |
 | Forms and actions | Form field names, method, destination, external destination finding | Login/signup/checkout/search can only be inferred from form names or paths; consent accept/reject clicks; button-triggered requests only for those clicks | General button workflow crawling and completed form submissions |
-| Consent analysis | Baseline, accept-all and reject-all scan modes; request phase tags; cookie phase tags; consent UI signals | Manual comparison of separate scans; before/after tags only within a scan where a button was clicked | Preference-based scan; automatic matched-state comparison; definitive claims that a tracker fired without valid consent |
+| Consent analysis | Baseline, accept-all and reject-all scan modes (the dashboard runs baseline; the others via the API `mode` field); request phase tags; cookie phase tags; consent UI signals | Manual comparison of separate scans; before/after tags only within a scan where a button was clicked | Preference-based scan; automatic matched-state comparison; definitive claims that a tracker fired without valid consent |
 | Security and investigation | Unknown domains, unknown scripts via inventory, external forms, missing cookie protections, new destinations/technologies/cookies/fields in comparison; evidence and confidence for findings | Unexpected parties and cross-border destinations rely on a small catalogue and configured GeoIP; suspicious patterns limited to current findings | General anomaly detection and verified cross-border transfer assessment |
-| Monitoring and access | Saved scan history, comparison endpoint, JSON/CSV/PDF export, local HTTP API | Technology and cookie change comparison covers additions; the UI reports summary counts | Scheduled scans, automated alerts, removals in diff, notification delivery |
+| Monitoring and access | Comparison endpoint (by scan id), JSON/CSV/PDF export, local HTTP API | Technology and cookie change comparison covers additions and is API-only | Scan history (removed for privacy), scheduled scans, automated alerts, removals in diff, notification delivery |
 
-## 2. Website Technology / BuiltWith + GTmetrix style analyzer
+## 2. TRAXELON Built: website technology and performance
 
 | Area | Yes | Partial | No |
 | --- | --- | --- | --- |
@@ -42,4 +42,4 @@ Checked against the requested Data Tracker and BuiltWith/GTmetrix feature lists 
 
 ## Practical limits
 
-The scanner samples up to the configured page and request limits. It cannot see server-side calls, private vendor integrations, hidden backend versions, or interactions it does not perform. Vendor country identifies the organisation in the catalogue; IP country identifies a resolved server and can differ for CDN edges. CrUX field data requires an API key and sufficient public traffic. The current local dashboard has no user authentication and should remain bound to localhost.
+The scanner samples up to the configured page and request limits. It cannot see server-side calls, private vendor integrations, hidden backend versions, or interactions it does not perform. Vendor country identifies the organisation in the catalogue; IP country identifies a resolved server and can differ for CDN edges. CrUX field data requires an API key and sufficient public traffic. The server has no user authentication and binds to localhost; put it behind an authenticating reverse proxy before exposing it.

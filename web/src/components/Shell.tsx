@@ -5,36 +5,37 @@ import {
   Boxes,
   ChevronRight,
   Clock3,
-  Database,
+  Cookie,
   FileSearch,
   Fingerprint,
   Gauge,
-  History,
   Menu,
   Network,
   Radar,
   ScanLine,
   ShieldCheck,
-  Sparkles,
   Upload,
   X,
 } from "lucide-react";
+import { hasSection, site, type SectionId } from "../site";
 
-const navItems = [
-  { href: "#overview", label: "Overview", icon: Gauge },
-  { href: "#flows", label: "Data flows", icon: Activity },
-  { href: "#network", label: "Network", icon: Network },
-  { href: "#technologies", label: "Technologies", icon: Boxes },
-  { href: "#pages", label: "Pages", icon: FileSearch },
-  { href: "#findings", label: "Findings", icon: ShieldCheck },
-  { href: "#history", label: "History", icon: History },
-] as const;
+const reportNavItems: Array<{ section: SectionId; label: string; icon: typeof Gauge }> = [
+  { section: "overview", label: "Overview", icon: Gauge },
+  { section: "flows", label: "Data flows", icon: Activity },
+  { section: "browser-state", label: "Browser state", icon: Cookie },
+  { section: "network", label: "Network", icon: Network },
+  { section: "technologies", label: "Technologies", icon: Boxes },
+  { section: "pages", label: "Pages", icon: FileSearch },
+  { section: "findings", label: "Findings", icon: ShieldCheck },
+];
+
+const navItems = reportNavItems.filter((item) => hasSection(item.section)).map(({ section, label, icon }) => ({ href: `#${section}`, label, icon }));
 
 function Brand() {
   return (
-    <a className="brand" href="#top" aria-label="NightCrawler home">
+    <a className="brand" href="#top" aria-label={`${site.name} home`}>
       <span className="brand-mark" aria-hidden="true"><Radar size={24} /></span>
-      <span><strong>NightCrawler</strong><small>WEBSITE INTELLIGENCE</small></span>
+      <span><strong>TRAXELON</strong><small>{site.tagline}</small></span>
     </a>
   );
 }
@@ -121,13 +122,13 @@ export function DashboardHeader() {
       <Atmosphere />
       <div className="hero-copy">
         <motion.div className="eyebrow eyebrow--hero" initial={reducedMotion ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
-          <span className="live-dot" aria-hidden="true" /> Website observability
+          <span className="live-dot" aria-hidden="true" /> {site.heroEyebrow}
         </motion.div>
         <motion.h1 initial={reducedMotion ? false : { opacity: 0, y: 26 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}>
-          See beneath<br /><span>the surface.</span>
+          {site.heroTitle[0]}<br /><span>{site.heroTitle[1]}</span>
         </motion.h1>
         <motion.p initial={reducedMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.55, delay: 0.28 }}>
-          Scan pages, expose third-party paths, trace data fields, and turn a website’s hidden activity into evidence you can act on.
+          {site.heroCopy}
         </motion.p>
       </div>
       <motion.div className="hero-visual" initial={reducedMotion ? false : { opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8, delay: 0.15 }} aria-hidden="true">
@@ -145,21 +146,16 @@ export function DashboardHeader() {
   );
 }
 
+/** Pages, depth, and consent mode are left to the server's defaults. */
 export interface ScanFormValues {
   url: string;
-  maxPages: number;
-  maxDepth: number;
   device: "desktop" | "mobile";
-  mode: "baseline" | "all" | "necessary_only";
   storageState?: unknown;
 }
 
-export function ScanForm({ busy, onSubmit, onDemo, onError }: { busy: boolean; onSubmit: (values: ScanFormValues) => Promise<void>; onDemo: () => Promise<void>; onError: (message: string) => void }) {
+export function ScanForm({ busy, onSubmit, onError }: { busy: boolean; onSubmit: (values: ScanFormValues) => Promise<void>; onError: (message: string) => void }) {
   const [url, setUrl] = useState("");
-  const [pages, setPages] = useState(10);
-  const [depth, setDepth] = useState(2);
   const [device, setDevice] = useState<ScanFormValues["device"]>("desktop");
-  const [mode, setMode] = useState<ScanFormValues["mode"]>("baseline");
   const [file, setFile] = useState<File | null>(null);
 
   const submit = async (event: FormEvent) => {
@@ -174,7 +170,7 @@ export function ScanForm({ busy, onSubmit, onDemo, onError }: { busy: boolean; o
       }
     }
     const normalizedUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
-    await onSubmit({ url: normalizedUrl, maxPages: pages, maxDepth: depth, device, mode, storageState });
+    await onSubmit({ url: normalizedUrl, device, storageState });
   };
 
   return (
@@ -189,16 +185,12 @@ export function ScanForm({ busy, onSubmit, onDemo, onError }: { busy: boolean; o
           <label htmlFor="url">Website URL</label>
           <div className="input-shell"><input id="url" type="text" inputMode="url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com" required /></div>
         </div>
-        <div className="field"><label htmlFor="pages-limit">Pages</label><input id="pages-limit" type="number" value={pages} onChange={(event) => setPages(Number(event.target.value))} min="1" max="100" /></div>
-        <div className="field"><label htmlFor="depth-limit">Depth</label><input id="depth-limit" type="number" value={depth} onChange={(event) => setDepth(Number(event.target.value))} min="0" max="5" /></div>
         <div className="field"><label htmlFor="device">Device</label><select id="device" value={device} onChange={(event) => setDevice(event.target.value as ScanFormValues["device"])}><option value="desktop">Desktop</option><option value="mobile">Mobile</option></select></div>
-        <div className="field"><label htmlFor="mode">Consent</label><select id="mode" value={mode} onChange={(event) => setMode(event.target.value as ScanFormValues["mode"])}><option value="baseline">Before</option><option value="all">Accept all</option><option value="necessary_only">Reject all</option></select></div>
         <motion.button id="scan-button" className="button button--primary" disabled={busy} type="submit" whileTap={{ scale: 0.97 }}>
           {busy ? <span className="button-spinner" aria-hidden="true" /> : <Radar size={18} aria-hidden="true" />}
           {busy ? "Scanning…" : "Start scan"}
         </motion.button>
         <label className="session-upload" htmlFor="session-file"><Upload size={16} aria-hidden="true" /><span>{file ? file.name : "Attach saved browser session"}</span><input id="session-file" type="file" accept=".json,application/json" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
-        <button type="button" id="demo-button" className="button button--tonal" disabled={busy} onClick={() => void onDemo()}><Sparkles size={17} /> View demo report</button>
       </form>
     </motion.section>
   );

@@ -5,7 +5,7 @@ import { classifyField, fieldsFromBody, fieldsFromUrl } from "./analysis";
 import { inspectInfrastructure } from "./infrastructure";
 import { enrichGeo } from "./geoip";
 import { detectStackTechnologies, fingerprintScript } from "./tech-intel";
-import { assertNavigable, type Resolver } from "./ssrf";
+import { assertNavigable } from "./ssrf";
 import { acceptLink, isThirdParty, normaliseUrl } from "./url";
 import { isAllowed, parseRobots, pathForRobots, permissivePolicy, type RobotsPolicy } from "./robots";
 import {
@@ -28,11 +28,11 @@ export const CRAWLER_VERSION = "1.1.0";
  * The scanner identifies itself honestly and stably.
  *
  * A crawler that hides behind a browser user-agent cannot be blocked by a site
- * that does not want it, cannot be recognised in a customer's own access logs,
+ * that does not want it, cannot be recognised in the site owner's access logs,
  * and cannot be matched by the `User-agent` group in their robots.txt. All
  * three are reasons to be identifiable rather than stealthy.
  */
-export const USER_AGENT = `RiftCMP-Scanner/${CRAWLER_VERSION} (+https://rift-cmp.dev/scanner)`;
+const USER_AGENT = `TraxelonScanner/${CRAWLER_VERSION} (+https://traxelon.com/tools)`;
 
 export interface CrawlOptions {
   startUrl: string;
@@ -41,20 +41,13 @@ export interface CrawlOptions {
   /** Playwright storageState JSON supplied for this scan; never persisted. */
   storageState?: Awaited<ReturnType<BrowserContext["storageState"]>>;
   limits?: Partial<CrawlLimits>;
-  /** Injected in tests so DNS behaviour can be exercised deterministically. */
-  resolver?: Resolver;
   /**
-   * Permit loopback and private targets. **Tests only.**
-   *
-   * The rendering half of the crawler cannot otherwise be exercised: the SSRF
-   * guard refuses 127.0.0.1, so the alternative is pointing tests at the live
-   * internet. Never set by the worker or reachable from the HTTP API - see the
-   * note in `ssrf.ts`.
+   * Permit loopback and private targets. **Tests only** (`scripts/smoke.ts`
+   * crawls a local fixture). The HTTP API never sets it - see `ssrf.ts`.
    */
   allowPrivateTargets?: boolean;
-  /** Structured progress, without values or headers. See docs/crawler.md. */
+  /** Structured progress, without values or headers. */
   onEvent?: (event: CrawlEvent) => void;
-  signal?: AbortSignal;
 }
 
 export interface CrawlEvent {
@@ -67,7 +60,7 @@ export interface CrawlEvent {
 }
 
 /** Thrown only for failures that make the whole scan meaningless. */
-export class ScanFatalError extends Error {
+class ScanFatalError extends Error {
   constructor(
     message: string,
     readonly code: string,
@@ -78,14 +71,10 @@ export class ScanFatalError extends Error {
 }
 
 /**
- * Cookie names that indicate a consent manager is present.
+ * Cookie and storage key fragments that indicate a consent manager.
  *
  * Detecting a consent UI is *not* the same as judging it. This records that
- * something consent-shaped exists and why we think so; whether it is valid,
- * sufficient, or lawful is a question for the compliance layer and a human.
- */
-/**
- * Cookie and storage key fragments that indicate a consent manager.
+ * something consent-shaped exists and why we think so, not whether it is valid.
  *
  * Matched as substrings, case-insensitively, because CMPs suffix their keys
  * with account or property ids — Sourcepoint writes `_sp_user_consent_7417`,
@@ -127,8 +116,7 @@ interface Budget {
  * Crawls a site and returns raw observations.
  *
  * This function performs **no persistence and no classification of legality**.
- * It returns what it saw; the worker persists it and the compliance layer, owned
- * by another person, decides what any of it means.
+ * It returns what it saw; `server.ts` persists the result.
  */
 export async function crawl(options: CrawlOptions): Promise<ScanResult> {
   const limits: CrawlLimits = { ...DEFAULT_LIMITS, ...options.limits };
@@ -144,10 +132,7 @@ export async function crawl(options: CrawlOptions): Promise<ScanResult> {
     throw new ScanFatalError(`Start URL rejected: ${entry.reason}`, "invalid_start_url");
   }
 
-  const guard = await assertNavigable(entry.url, {
-    resolver: options.resolver,
-    allowPrivateTargets: options.allowPrivateTargets,
-  });
+  const guard = await assertNavigable(entry.url, { allowPrivateTargets: options.allowPrivateTargets });
   if (!guard.allowed) {
     // Deliberately fatal. A start URL pointing at private space is not a page
     // failure to be recorded and stepped over; it is a request we must refuse.
@@ -176,7 +161,7 @@ export async function crawl(options: CrawlOptions): Promise<ScanResult> {
   }
 
   // One context per scan. Never reused across scans: cookies and storage from
-  // one customer's site must not be visible while scanning another's.
+  // one site must not be visible while scanning another.
   let context: BrowserContext;
   try {
     context = await browser.newContext({
@@ -215,10 +200,6 @@ export async function crawl(options: CrawlOptions): Promise<ScanResult> {
 
   try {
     while (queue.length > 0) {
-      if (options.signal?.aborted) {
-        noteLimit("cancelled");
-        break;
-      }
       if (Date.now() > deadline) {
         noteLimit("maxDuration");
         emit({ event: "limit_reached", limit: "maxDuration" });
@@ -250,7 +231,6 @@ export async function crawl(options: CrawlOptions): Promise<ScanResult> {
             limits,
             scopeOrigin,
             robots,
-            resolver: options.resolver,
             allowPrivateTargets: options.allowPrivateTargets,
             budget,
             noteLimit,
@@ -422,7 +402,6 @@ interface VisitContext {
   limits: CrawlLimits;
   scopeOrigin: string;
   robots: RobotsPolicy;
-  resolver?: Resolver;
   allowPrivateTargets?: boolean;
   budget: Budget;
   noteLimit: (name: string) => void;
@@ -502,10 +481,7 @@ async function visitPage(
 
   // Re-checked per page, not once per scan: a link or redirect is an
   // attacker-controlled path from an allowed origin to a disallowed one.
-  const guard = await assertNavigable(url, {
-    resolver: ctx.resolver,
-    allowPrivateTargets: ctx.allowPrivateTargets,
-  });
+  const guard = await assertNavigable(url, { allowPrivateTargets: ctx.allowPrivateTargets });
   if (!guard.allowed) {
     ctx.emit({ event: "page_skipped_ssrf", url, error: guard.reason });
     return finish({ ...base, error: `ssrf_blocked:${guard.reason}` });
@@ -650,10 +626,7 @@ async function visitPage(
     // actually landed, not only where we intended to go.
     const landed = page.url();
     if (landed !== url) {
-      const landedGuard = await assertNavigable(landed, {
-        resolver: ctx.resolver,
-        allowPrivateTargets: ctx.allowPrivateTargets,
-      });
+      const landedGuard = await assertNavigable(landed, { allowPrivateTargets: ctx.allowPrivateTargets });
       if (!landedGuard.allowed) {
         await page.close().catch(() => {});
         return finish({
@@ -955,7 +928,7 @@ async function collectLinks(page: Page, base: string, scopeOrigin: string): Prom
  *
  * **Values are dropped here and never leave this function.** Playwright returns
  * them whether we want them or not, so the discard is explicit and happens at
- * the boundary rather than at the database.
+ * the boundary rather than before saving.
  */
 async function collectCookies(
   context: BrowserContext,

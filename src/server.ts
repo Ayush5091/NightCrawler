@@ -1,22 +1,29 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { extname, isAbsolute, join, relative, resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { loadEnvFile } from "node:process";
 import { crawl } from "./crawl";
 import { buildInsights, diffScans } from "./analysis";
 import { renderPdf } from "./pdf";
-import { demoScan } from "./demo";
 import { runLighthouse } from "./lighthouse";
 import { fetchCruxHistory } from "./crux";
 import type { ScanResult } from "./types";
 
 const localEnv = join(process.cwd(), ".env.local");
 if (existsSync(localEnv)) loadEnvFile(localEnv);
-const port = Number(process.env.PORT ?? 4173);
 const dataDir = join(process.cwd(), ".scan-data");
-const publicDir = resolve(process.cwd(), "web-dist");
+
+// Two TRAXELON sites share this API and its scan jobs; each listener
+// serves its own frontend build. `--site=built` or `--site=data` starts one.
+const sites = {
+  built: { name: "TRAXELON Built", port: Number(process.env.BUILT_PORT ?? process.env.PORT ?? 4173) },
+  data: { name: "TRAXELON Data", port: Number(process.env.DATA_PORT ?? 4174) },
+} as const;
+type SiteId = keyof typeof sites;
+const only = process.argv.find((arg) => arg.startsWith("--site="))?.slice("--site=".length);
+if (only && !(only in sites)) throw new Error(`Unknown site "${only}". Use --site=built or --site=data.`);
 const jobs = new Map<string, { status: "running" | "completed" | "failed"; stage?: string; error?: string; result?: ScanResult }>();
 
 function json(res: ServerResponse, status: number, value: unknown) {
@@ -39,7 +46,8 @@ async function stored(id: string): Promise<ScanResult | null> {
   catch { return null; }
 }
 
-async function handle(req: IncomingMessage, res: ServerResponse) {
+async function handle(siteId: SiteId, req: IncomingMessage, res: ServerResponse) {
+  const publicDir = resolve(process.cwd(), "web-dist", siteId);
   const route = new URL(req.url ?? "/", "http://localhost");
   if (req.method === "GET" && route.pathname === "/") {
     res.writeHead(200, { "content-type": "text/html; charset=utf-8", "content-security-policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'", "x-content-type-options": "nosniff" });
@@ -51,6 +59,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     const relativeAssetPath = relative(publicDir, assetPath);
     if (!relativeAssetPath.startsWith("..") && !isAbsolute(relativeAssetPath)) {
       try {
+        const file = await readFile(assetPath);
         const type = new Map([
           [".js", "text/javascript; charset=utf-8"], [".css", "text/css; charset=utf-8"],
           [".woff2", "font/woff2"], [".woff", "font/woff"], [".svg", "image/svg+xml"],
@@ -58,7 +67,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
         ]).get(extname(assetPath)) ?? "application/octet-stream";
         const cacheControl = route.pathname.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache";
         res.writeHead(200, { "content-type": type, "cache-control": cacheControl, "x-content-type-options": "nosniff" });
-        res.end(await readFile(assetPath));
+        res.end(file);
         return;
       } catch { /* Fall through to the API/404 handler. */ }
     }
@@ -94,22 +103,13 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
     }).catch((error: Error) => jobs.set(id, { status: "failed", error: error.message }));
     return;
   }
-  if (req.method === "GET" && route.pathname === "/api/scans") {
-    await mkdir(dataDir, { recursive: true });
-    const files = (await readdir(dataDir)).filter((name) => /^[a-f0-9-]{36}\.json$/.test(name));
-    const scans = await Promise.all(files.map(async (name) => {
-      const scan = await stored(name.slice(0, -5));
-      return scan ? { id: name.slice(0, -5), url: scan.startUrl, startedAt: scan.startedAt, summary: scan.summary, status: scan.summary.pagesScanned > 0 ? "completed" : "failed", error: scan.pages.find((page) => page.error)?.error ?? null } : null;
-    }));
-    return json(res, 200, scans.filter(Boolean).sort((a, b) => String(b?.startedAt).localeCompare(String(a?.startedAt))));
-  }
-  const match = /^\/api\/scans\/(demo|[a-f0-9-]{36})(?:\/(json|csv|pdf|compare))?$/.exec(route.pathname);
+  const match = /^\/api\/scans\/([a-f0-9-]{36})(?:\/(json|csv|pdf|compare))?$/.exec(route.pathname);
   if (req.method === "GET" && match) {
     const [, id, format] = match;
     const running = jobs.get(id);
     if (running?.status === "running") return json(res, 200, { id, status: "running", stage: running.stage });
     if (running?.status === "failed") return json(res, 200, { id, status: "failed", error: running.error, scan: running.result });
-    const scan = id === "demo" ? demoScan() : running?.result ?? await stored(id);
+    const scan = running?.result ?? await stored(id);
     if (!scan) return json(res, 404, { error: "Scan not found" });
     if (!format && scan.summary.pagesScanned === 0) return json(res, 200, { id, status: "failed", error: `Could not load the website: ${scan.pages.find((page) => page.error)?.error ?? "No page rendered"}` });
     if (format === "json") {
@@ -126,7 +126,7 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
       return res.end(csv);
     }
     if (format === "pdf") {
-      const pdf = await renderPdf(scan);
+      const pdf = await renderPdf(scan, sites[siteId].name);
       res.writeHead(200, { "content-type": "application/pdf", "content-disposition": `attachment; filename="scan-${id}.pdf"` });
       return res.end(pdf);
     }
@@ -139,6 +139,9 @@ async function handle(req: IncomingMessage, res: ServerResponse) {
   return json(res, 404, { error: "Not found" });
 }
 
-createServer((req, res) => { void handle(req, res).catch((error: Error) => json(res, 500, { error: error.message })); }).listen(port, "127.0.0.1", () => {
-  console.log(`Crawler dashboard: http://127.0.0.1:${port}`);
-});
+for (const siteId of (only ? [only] : Object.keys(sites)) as SiteId[]) {
+  const { name, port } = sites[siteId];
+  createServer((req, res) => { void handle(siteId, req, res).catch((error: Error) => res.headersSent ? res.end() : json(res, 500, { error: error.message })); }).listen(port, "127.0.0.1", () => {
+    console.log(`${name}: http://127.0.0.1:${port}`);
+  });
+}

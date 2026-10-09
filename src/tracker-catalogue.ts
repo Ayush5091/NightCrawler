@@ -1,25 +1,17 @@
 /**
- * Host → vendor classification for discovered components.
- *
- * ## Why this lives on the server
- *
- * The SDK reports raw hostnames and nothing else. Classification happens here
- * because the catalogue changes far more often than the tag does, and shipping
- * it to the browser would mean every customer had to redeploy their website
- * whenever a vendor was added. It also keeps the bundle small, which matters for
- * a script that loads on every page of someone else's site.
+ * Host → vendor classification for observed third parties.
  *
  * ## Why `country` is a first-class field
  *
- * Most cookie tools answer "what is this?". Under DPDP the more consequential
- * question is "where does this data end up?", because transfer outside India is
- * treated separately from processing within it. So the catalogue records a
- * destination country and the read model derives `crosses_border` from it.
+ * Most cookie tools answer "what is this?". Under India's DPDP Act the more
+ * consequential question is "where does this data end up?", because transfer
+ * outside India is treated separately from processing within it. So the
+ * catalogue records a destination country and `crosses_border` is derived from
+ * it.
  *
  * `country` is the jurisdiction the receiving organisation is understood to
  * operate under, not a GeoIP result for a particular anycast POP. A CDN edge in
- * Mumbai serving a US company's tag does not make the recipient Indian, and
- * pretending otherwise would produce a comforting and wrong answer.
+ * Mumbai serving a US company's tag does not make the recipient Indian.
  *
  * ## Honest limits
  *
@@ -27,13 +19,12 @@
  * for a maintained tracker database - the open ones (DuckDuckGo Tracker Radar,
  * EasyPrivacy, Disconnect) are far more complete and are the obvious upgrade
  * path. Unmatched hosts are reported as `vendor: null` and surfaced as
- * "unclassified" rather than silently treated as safe: an unknown third party is
- * the thing an operator most needs to look at.
+ * "unclassified" rather than silently treated as safe.
  */
 
 export interface CatalogueEntry {
   vendor: string;
-  /** What the vendor is normally used for. Free text, matched to purposes by the operator. */
+  /** What the vendor is normally used for. Free text. */
   category: string;
   /** ISO 3166-1 alpha-2 of the receiving organisation's jurisdiction. */
   country: string;
@@ -124,7 +115,7 @@ const CATALOGUE: Record<string, CatalogueEntry> = {
 };
 
 /** The jurisdiction the platform treats as domestic. */
-export const HOME_COUNTRY = "IN";
+const HOME_COUNTRY = "IN";
 
 export interface Classification {
   vendor: string | null;
@@ -167,36 +158,4 @@ export function classifyHost(host: string): Classification {
   }
 
   return UNCLASSIFIED;
-}
-
-/** Exposed for the catalogue-coverage test and for an operator-facing count. */
-export function catalogueSize(): number {
-  return Object.keys(CATALOGUE).length;
-}
-
-/**
- * The host patterns a vendor is known by.
- *
- * The reverse of {@link classifyHost}, and it exists for enforcement: the
- * browser has to decide about a *host*, while an operator approves a policy
- * about a *vendor*. Resolving one to the other happens here, on the server,
- * so the catalogue never ships to a page.
- *
- * Returns suffix patterns, not exact hosts. `google-analytics.com` matches
- * `www.google-analytics.com` and `region1.google-analytics.com`, which is the
- * same matching rule `classifyHost` applies and has to be, or a vendor would be
- * classified one way and enforced another.
- */
-export function hostsForVendor(vendor: string): string[] {
-  const wanted = vendor.trim().toLowerCase();
-  if (!wanted) return [];
-  return Object.entries(CATALOGUE)
-    .filter(([, entry]) => entry.vendor.toLowerCase() === wanted)
-    .map(([host]) => host)
-    .sort();
-}
-
-/** Every vendor the catalogue knows, for an operator-facing list. */
-export function catalogueVendors(): string[] {
-  return [...new Set(Object.values(CATALOGUE).map((e) => e.vendor))].sort();
 }

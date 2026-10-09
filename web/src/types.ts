@@ -22,15 +22,6 @@ export interface ReportData {
   insights: ScanInsights;
 }
 
-export interface HistoryItem {
-  id: string;
-  url: string;
-  startedAt: string;
-  status: "completed" | "failed";
-  error?: string | null;
-  summary: ScanResult["summary"];
-}
-
 export interface ScanJob {
   id: string;
   status: "running" | "completed" | "failed";
@@ -38,11 +29,4 @@ export interface ScanJob {
   error?: string;
   scan?: ScanResult;
   insights?: ScanInsights;
-}
-
-export interface ComparisonResult {
-  destinations?: string[];
-  technologies?: string[];
-  cookies?: string[];
-  dataFields?: string[];
 }

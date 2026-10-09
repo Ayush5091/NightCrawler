@@ -1,4 +1,4 @@
-import type { RequestObservation, ScanResult } from "./types";
+import type { ScanResult } from "./types";
 
 const FIELD_RULES: Array<[RegExp, string]> = [
   [/e.?mail/i, "email"], [/phone|mobile|tel(ephone)?/i, "phone"],

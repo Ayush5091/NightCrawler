@@ -1,15 +1,17 @@
 {
-  "name": "standalone-webcrawler",
+  "name": "traxelon-tools",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "main": "./src/index.ts",
   "scripts": {
-    "build:web": "vite build",
-    "dev:web": "vite",
+    "build:web": "vite build --mode built && vite build --mode data",
+    "dev:web": "vite --mode built",
+    "dev:web:data": "vite --mode data",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.web.json --noEmit",
     "crawl": "tsx scripts/crawl-demo.mjs",
     "start": "npm run build:web && tsx src/server.ts",
+    "start:built": "vite build --mode built && tsx src/server.ts --site=built",
+    "start:data": "vite build --mode data && tsx src/server.ts --site=data",
     "geoip:update": "node scripts/update-geoip.mjs",
     "smoke": "tsx scripts/smoke.ts",
     "ui-smoke": "tsx scripts/ui-smoke.ts"

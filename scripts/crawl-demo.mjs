@@ -13,7 +13,7 @@ const maxDepth = Number(process.argv[4] ?? 1);
 
 const line = (s = "") => console.log(s);
 
-line(`Webcrawler ${CRAWLER_VERSION}`);
+line(`TRAXELON scanner ${CRAWLER_VERSION}`);
 line(`target ${startUrl}   maxPages ${maxPages}   maxDepth ${maxDepth}`);
 line("─".repeat(70));
 

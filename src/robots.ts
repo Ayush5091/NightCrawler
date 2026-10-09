@@ -1,25 +1,15 @@
 /**
  * robots.txt parsing and evaluation.
  *
- * The scanner obeys robots.txt. That is a policy choice worth stating, because
- * it is not the only defensible one: the customer owns the site being scanned
- * and has asked us to scan it, so an argument exists that their own robots.txt
- * should not constrain a tool they invoked.
+ * The scanner obeys robots.txt, for three reasons:
  *
- * We obey it anyway, for three reasons:
- *
- *  - We cannot verify at scan time that the person who typed the URL speaks for
- *    the site. Tenant ownership is checked against *our* records, not against
- *    the domain, so a scan of `competitor.com` is a request we must assume might
- *    be unauthorised.
+ *  - It cannot verify that the person who typed the URL speaks for the site, so
+ *    any scan must be assumed to be of a site the user does not own.
  *  - `Disallow` frequently marks expensive or destructive endpoints — search,
- *    export, logout, cart mutation. Ignoring it is how a crawler logs a customer
- *    out of their own admin panel or triggers a thousand report generations.
+ *    export, logout, cart mutation. Ignoring it is how a crawler logs a user
+ *    out of an admin panel or triggers a thousand report generations.
  *  - It is the norm a well-behaved crawler follows, and being on the wrong side
  *    of that is a reputational and legal risk that buys very little coverage.
- *
- * A later scan mode may offer verified-ownership override. That needs domain
- * verification, which does not exist yet.
  */
 
 export interface RobotsRule {
@@ -35,7 +25,7 @@ export interface RobotsPolicy {
   sitemaps: string[];
   /**
    * How the policy was arrived at, so a scan can report why it crawled the way
-   * it did rather than leaving an operator to guess.
+   * it did rather than leaving the reader to guess.
    */
   source: "fetched" | "absent" | "unreachable" | "malformed";
 }

@@ -17,9 +17,7 @@ import type {
  * A detector reports **what a thing is** and **why we think so**. It never
  * reports what the law requires. "Google Analytics, category analytics,
  * because we saw this script URL and this network host" is a detector's job;
- * "therefore consent is required" is the compliance layer's, and belongs to
- * another person entirely. Encoding a legal conclusion here would bury it in a
- * pattern-matching table where no lawyer would ever find it.
+ * "therefore consent is required" is a legal judgement for a human reviewer.
  *
  * ## Why the host catalogue is reused rather than reimplemented
  *
@@ -141,7 +139,7 @@ function fromSignature(spec: SignatureSpec): TrackerDetector {
  * Signatures for technologies a crawler can identify by more than hostname.
  *
  * Kept small on purpose. The host catalogue already covers breadth; these add
- * depth for the vendors an onboarding flow most needs to name precisely, and
+ * depth for the vendors a report most needs to name precisely, and
  * every one of them is checkable by reading the strings.
  */
 const SIGNATURES: SignatureSpec[] = [
@@ -256,7 +254,7 @@ const SIGNATURES: SignatureSpec[] = [
   },
 ];
 
-export const DETECTORS: TrackerDetector[] = SIGNATURES.map(fromSignature);
+const DETECTORS: TrackerDetector[] = SIGNATURES.map(fromSignature);
 
 /** Adds a host as evidence once, respecting the per-finding cap. */
 function addHostEvidence(finding: TechnologyFinding, host: string, cap: number): void {
@@ -270,7 +268,7 @@ function addHostEvidence(finding: TechnologyFinding, host: string, cap: number):
  * parties no signature named.
  *
  * The fallback matters more than the signatures: an unmatched third-party host
- * is exactly the row an operator most needs to see, so it is surfaced as a
+ * is exactly the entry a reader most needs to see, so it is surfaced as a
  * low-confidence finding with the host as its evidence rather than dropped.
  */
 export function detectTechnologies(
@@ -282,7 +280,7 @@ export function detectTechnologies(
   for (const detector of DETECTORS) {
     const result = detector.matches(input);
     if (!result) continue;
-    const catalogue = classifyHost(pickHostFor(result, input) ?? "");
+    const catalogue = classifyHost(pickHostFor(result) ?? "");
     findings.set(detector.id, {
       detectorId: detector.id,
       name: result.name,
@@ -307,7 +305,7 @@ export function detectTechnologies(
    *
    * Without this, a real crawl of one marketing site reported "HubSpot" four
    * times — once from the script signature and once each for `app.hubspot.com`,
-   * `sgtm-amer.hubspot.com` and `cta-service-cms2.hubspot.com`. An operator
+   * `sgtm-amer.hubspot.com` and `cta-service-cms2.hubspot.com`. A reader
    * reading that cannot tell whether they have one HubSpot or four.
    */
   const claimedVendors = new Set([...findings.values()].map((finding) => finding.name));
@@ -340,7 +338,7 @@ export function detectTechnologies(
     findings.set(id, {
       detectorId: id,
       // An unmatched host is reported by its own name rather than as "unknown",
-      // so the operator sees what to go and look up.
+      // so the reader sees what to go and look up.
       name: catalogue.vendor ?? request.host,
       category: catalogue.category ?? "unclassified",
       // Host alone is weaker evidence than a named signature, and saying so is
@@ -356,7 +354,7 @@ export function detectTechnologies(
 }
 
 /** The host a finding's evidence points at, for catalogue lookup. */
-function pickHostFor(result: DetectionResult, input: DetectionInput): string | null {
+function pickHostFor(result: DetectionResult): string | null {
   const host = result.evidence.find((item) => item.type === "network_host")?.value;
   if (host) return host;
   const script = result.evidence.find((item) => item.type === "script")?.value;
@@ -367,6 +365,5 @@ function pickHostFor(result: DetectionResult, input: DetectionInput): string | n
       return null;
     }
   }
-  void input;
   return null;
 }

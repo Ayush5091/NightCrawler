@@ -2,25 +2,14 @@
  * Observation types produced by the crawler.
  *
  * These are deliberately *observations*, not conclusions. Every field answers
- * "what did we see", never "what does the law require". The distinction is
- * structural rather than stylistic: the consent and compliance layer is another
- * person's work, and a scanner that pre-empts it produces answers nobody can
- * audit. See `docs/crawler.md`.
+ * "what did we see", never "what does the law require".
  */
-
-export const SCAN_STATUSES = ["queued", "running", "completed", "failed", "cancelled"] as const;
-export type ScanStatus = (typeof SCAN_STATUSES)[number];
 
 /**
- * The consent state a scan was performed under.
- *
- * Only `baseline` is implemented. The others exist in the vocabulary now so
- * that observations are stamped with the state they were made in from the
- * start — retrofitting that later would leave every existing row ambiguous
- * about what it actually proves.
+ * The consent state a scan was performed under: `baseline` clicks nothing,
+ * `all` clicks an accept-all button, `necessary_only` clicks a reject button.
  */
-export const SCAN_MODES = ["baseline", "necessary_only", "analytics", "advertising", "all"] as const;
-export type ScanMode = (typeof SCAN_MODES)[number];
+export type ScanMode = "baseline" | "necessary_only" | "all";
 
 export interface CrawlLimits {
   maxPages: number;
@@ -30,7 +19,7 @@ export interface CrawlLimits {
   navigationTimeoutMs: number;
   stabilisationMs: number;
   maxRedirects: number;
-  /** Per-scan ceilings, so one hostile page cannot fill the database. */
+  /** Per-scan ceilings, so one hostile page cannot grow a report without bound. */
   maxRequests: number;
   maxCookies: number;
   maxScripts: number;

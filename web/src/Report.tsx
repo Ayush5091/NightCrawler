@@ -1,6 +1,5 @@
 import { motion, useReducedMotion } from "framer-motion";
 import {
-  Activity,
   ArrowRight,
   Box,
   Cable,
@@ -10,22 +9,20 @@ import {
   Cookie,
   Database,
   Download,
-  FileCode2,
   FileSearch,
   Fingerprint,
   Globe2,
   KeyRound,
-  Network,
   RadioTower,
   Route,
   Server,
   ShieldAlert,
   ShieldCheck,
-  TimerReset,
   TriangleAlert,
 } from "lucide-react";
 import { formatBytes, formatDate, truncate } from "./lib";
 import type { ReportData } from "./types";
+import { hasSection, sectionNumber, site } from "./site";
 import { Card, Chip, DataTable, EmptyState, ExportLink, MetricCard, Reveal, SectionHeader, StatList } from "./components/UI";
 
 const sumTransfer = (report: ReportData) => report.scan.requests.reduce((sum, request) => sum + (request.transferBytes || 0), 0);
@@ -69,13 +66,15 @@ function Overview({ report }: { report: ReportData }) {
     { label: "Pages", value: scan.summary.pagesScanned, icon: FileSearch },
     { label: "Requests", value: scan.summary.requestsObserved, icon: RadioTower },
     { label: "Third parties", value: scan.summary.thirdPartyDomains, icon: Globe2 },
-    { label: "Technologies", value: scan.summary.technologiesDetected, icon: Box },
+    site.id === "built"
+      ? { label: "Technologies", value: scan.summary.technologiesDetected, icon: Box }
+      : { label: "Cookies", value: scan.summary.cookiesFound, icon: Cookie },
     { label: "Data fields", value: insights.dataFields.length, icon: Fingerprint },
   ];
 
   return (
     <section id="overview" className="report-section">
-      <SectionHeader eyebrow="01 / SIGNAL" title="Overview" description="The scan at a glance—surface area, external reach, and the systems in between." />
+      <SectionHeader eyebrow={`${sectionNumber("overview")} / SIGNAL`} title="Overview" description="The scan at a glance—surface area, external reach, and the systems in between." />
       <motion.div className="metric-grid" initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }} variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.07 } } }}>
         {metrics.map(({ label, value, icon: Icon }) => (
           <motion.div key={label} variants={{ hidden: { opacity: 0, y: 18 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4 } } }}>
@@ -84,6 +83,7 @@ function Overview({ report }: { report: ReportData }) {
         ))}
       </motion.div>
 
+      {site.id === "built" ? <>
       <div id="lighthouse-scores" className="score-grid">
         {audit?.status === "completed" ? Object.entries({ performance: "Performance", accessibility: "Accessibility", "best-practices": "Best practices", seo: "SEO" }).map(([key, label]) => {
           const score = audit.scores?.[key];
@@ -149,6 +149,7 @@ function Overview({ report }: { report: ReportData }) {
           </Card>
         </Reveal>
       </div>
+      </> : null}
     </section>
   );
 }
@@ -157,7 +158,7 @@ function Opportunities({ report }: { report: ReportData }) {
   const audit = report.scan.lighthouse;
   return (
     <section id="audits" className="report-section">
-      <SectionHeader eyebrow="02 / OPTIMIZE" title="Opportunities" description="Lighthouse findings with the greatest potential effect on experience and efficiency." />
+      <SectionHeader eyebrow={`${sectionNumber("audits")} / OPTIMIZE`} title="Opportunities" description="Lighthouse findings with the greatest potential effect on experience and efficiency." />
       <Card className="table-card">
         <DataTable label="Lighthouse optimization opportunities" headers={["Audit", "Score", "Potential saving"]} rows={audit?.status === "completed" ? (audit.opportunities || []).map((item) => [<strong>{item.title}</strong>, item.score == null ? "—" : Math.round(item.score * 100), item.displayValue || "—"]) : []} empty="No Lighthouse audit is available for this report." />
       </Card>
@@ -170,7 +171,7 @@ function DataFlows({ report }: { report: ReportData }) {
   return (
     <section id="flows" className="report-section report-section--atmospheric">
       <div className="section-glow" aria-hidden="true" />
-      <SectionHeader eyebrow="03 / TRACE" title="Data flows" description="Follow each observed path from the page that initiated it to the service that received it." />
+      <SectionHeader eyebrow={`${sectionNumber("flows")} / TRACE`} title="Data flows" description="Follow each observed path from the page that initiated it to the service that received it." />
       <div className="flow-grid">
         <Card title="Destination graph" action={<Route size={18} aria-hidden="true" />}>
           <div id="flow-list" className="scroll-list">
@@ -212,7 +213,7 @@ function BrowserState({ report }: { report: ReportData }) {
   const { scan } = report;
   return (
     <section id="browser-state" className="report-section">
-      <SectionHeader eyebrow="04 / STATE" title="Browser state" description="Cookie and storage identifiers only—NightCrawler does not retain their values." />
+      <SectionHeader eyebrow={`${sectionNumber("browser-state")} / STATE`} title="Browser state" description="Cookie and storage identifiers only—TRAXELON does not retain their values." />
       <div className="two-column-grid">
         <Card title="Cookies" className="table-card" action={<Cookie size={18} aria-hidden="true" />}>
           <div id="cookie-list"><DataTable label="Observed cookies" headers={["Name", "Domain", "Expiry", "Protection", "Phase"]} rows={(scan.cookies || []).slice(0, 300).map((cookie) => [
@@ -243,7 +244,7 @@ function NetworkTimeline({ report }: { report: ReportData }) {
   const maxMs = Math.max(1, ...requests.map((request) => (request.timing?.startOffsetMs || 0) + (request.durationMs || 0)));
   return (
     <section id="network" className="report-section">
-      <SectionHeader eyebrow="05 / REQUESTS" title="Network timeline" description="Every observed request with destination, timing, transfer size, and exposed field names." />
+      <SectionHeader eyebrow={`${sectionNumber("network")} / REQUESTS`} title="Network timeline" description="Every observed request with destination, timing, transfer size, and exposed field names." />
       <Card className="table-card">
         <div id="request-list"><DataTable label="Network request timeline" headers={["Page / resource", "Method", "Status", "Type", "Destination", "Waterfall", "Time", "Transfer", "Fields", "Phase"]} rows={requests.slice(0, 500).map((request) => {
           const start = Math.min(98, Math.max(0, 100 * (request.timing?.startOffsetMs || 0) / maxMs));
@@ -270,7 +271,7 @@ function NetworkTimeline({ report }: { report: ReportData }) {
 function TechnologyTable({ report }: { report: ReportData }) {
   return (
     <section id="technologies" className="report-section">
-      <SectionHeader eyebrow="06 / STACK" title="Technologies & vendors" description="Evidence-backed detection across requests, scripts, cookies, DOM signals, and response headers." />
+      <SectionHeader eyebrow={`${sectionNumber("technologies")} / STACK`} title="Technologies & vendors" description="Evidence-backed detection across requests, scripts, cookies, DOM signals, and response headers." />
       <Card className="table-card">
         <div id="technology-list"><DataTable label="Detected technologies and vendors" headers={["Technology", "Category", "Confidence", "Country", "Evidence"]} rows={report.scan.technologies.map((technology) => [
           <strong>{technology.name}</strong>,
@@ -287,7 +288,7 @@ function TechnologyTable({ report }: { report: ReportData }) {
 function PageInventory({ report }: { report: ReportData }) {
   return (
     <section id="pages" className="report-section">
-      <SectionHeader eyebrow="07 / INVENTORY" title="Page inventory" description="Rendered pages, page-level performance, forms, SEO signals, and transport security." />
+      <SectionHeader eyebrow={`${sectionNumber("pages")} / INVENTORY`} title="Page inventory" description="Rendered pages, page-level performance, forms, SEO signals, and transport security." />
       <Card className="table-card">
         <div id="page-list"><DataTable label="Scanned page inventory" headers={["Page", "Status", "Title", "Load", "Forms", "SEO", "Security"]} rows={report.scan.pages.map((page) => [
           <details><summary>{truncate(page.finalUrl || page.url, 88)}</summary><div className="details-content"><span>Description: {page.description || "—"}</span><span>Canonical: {page.canonical || "—"}</span><span>Headings: {Object.entries(page.headings || {}).map(([key, value]) => `${key}: ${value}`).join(", ") || "—"}</span><span>Frames: {(page.frames || []).join(", ") || "—"}</span></div></details>,
@@ -306,7 +307,7 @@ function PageInventory({ report }: { report: ReportData }) {
 function Findings({ report }: { report: ReportData }) {
   return (
     <section id="findings" className="report-section">
-      <SectionHeader eyebrow="08 / REVIEW" title="Findings" description="Evidence worth a closer look, presented as observations rather than legal conclusions." />
+      <SectionHeader eyebrow={`${sectionNumber("findings")} / REVIEW`} title="Findings" description="Evidence worth a closer look, presented as observations rather than legal conclusions." />
       <div id="finding-list" className="finding-list">
         {report.insights.findings.length ? report.insights.findings.slice(0, 100).map((finding, index) => (
           <motion.article className={`finding finding--${finding.severity}`} key={`${finding.kind}-${index}`} initial={{ opacity: 0, x: -12 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: Math.min(index * 0.025, 0.3) }}>
@@ -325,14 +326,14 @@ export function Report({ report }: { report: ReportData }) {
   return (
     <motion.div id="report" initial={reducedMotion ? false : { opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}>
       <ReportHeading report={report} />
-      <Overview report={report} />
-      <Opportunities report={report} />
-      <DataFlows report={report} />
-      <BrowserState report={report} />
-      <NetworkTimeline report={report} />
-      <TechnologyTable report={report} />
-      <PageInventory report={report} />
-      <Findings report={report} />
+      {hasSection("overview") ? <Overview report={report} /> : null}
+      {hasSection("audits") ? <Opportunities report={report} /> : null}
+      {hasSection("flows") ? <DataFlows report={report} /> : null}
+      {hasSection("browser-state") ? <BrowserState report={report} /> : null}
+      {hasSection("network") ? <NetworkTimeline report={report} /> : null}
+      {hasSection("technologies") ? <TechnologyTable report={report} /> : null}
+      {hasSection("pages") ? <PageInventory report={report} /> : null}
+      {hasSection("findings") ? <Findings report={report} /> : null}
     </motion.div>
   );
 }
